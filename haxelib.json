@@ -7,5 +7,5 @@
 	"version": "1.0.2",
 	"releasenote": "MaxRectsPacker can now disallow flipping of rects, other minor additions",
 	"contributors": ["samcodes"],
-	"dependencies": {"sure": ""}
+	"dependencies": {}
 }

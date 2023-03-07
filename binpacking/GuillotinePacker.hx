@@ -29,66 +29,66 @@ class GuillotinePacker implements IOccupancy {
 	#if debug
 	private var disjointRects:DisjointRectCollection = new DisjointRectCollection();
 	#end
-	
+
 	public function new(width:Int = 0, height:Int = 0) {
 		binWidth = width;
 		binHeight = height;
-		
+
 		var n = new Rect(0, 0, width, height);
 		freeRectangles.push(n);
 	}
-	
+
 	public function insert(width:Int, height:Int, merge:Bool, rectChoice:GuillotineFreeRectChoiceHeuristic, splitMethod:GuillotineSplitHeuristic):Rect {
 		var data = findPositionForNewNode(width, height, rectChoice);
 		var newRect = data.rect;
 		var freeNodeIndex = data.nodeIndex;
-		
+
 		if (newRect == null || (newRect.width == 0 && newRect.height == 0) || freeNodeIndex < 0) {
 			return null;
 		}
-		
+
 		splitFreeRectByHeuristic(freeRectangles[freeNodeIndex], newRect, splitMethod);
-		
+
 		freeRectangles.splice(freeNodeIndex, 1);
-		
+
 		if (merge) {
 			mergeFreeList();
 		}
-		
+
 		usedRectangles.push(newRect);
-		
+
 		#if debug
-		Sure.sure(disjointRects.add(newRect) == true);
+		ceramic.Assert.assert(disjointRects.add(newRect) == true);
 		#end
-		
+
 		return newRect;
 	}
-	
+
 	public function occupancy():Float {
 		var usedSurfaceArea:Float = 0;
 		for (i in 0...usedRectangles.length) {
 			usedSurfaceArea += usedRectangles[i].width * usedRectangles[i].height;
 		}
-		
+
 		return usedSurfaceArea / (binWidth * binHeight);
 	}
-	
+
 	public function getFreeRectangles():Array<Rect> {
 		return freeRectangles;
 	}
-	
+
 	public function getUsedRectangles():Array<Rect> {
 		return usedRectangles;
 	}
-	
+
 	public function mergeFreeList():Void {
 		#if debug
 		var test = new DisjointRectCollection();
 		for (i in 0...freeRectangles.length) {
-			Sure.sure(test.add(freeRectangles[i]) == true);
+			ceramic.Assert.assert(test.add(freeRectangles[i]) == true);
 		}
 		#end
-		
+
 		for (i in 0...freeRectangles.length) {
 			var j = i + 1;
 			while (j < freeRectangles.length) {
@@ -119,21 +119,21 @@ class GuillotinePacker implements IOccupancy {
 				}
 			}
 		}
-		
+
 		#if debug
 		test.clear();
 		// TODO this triggers sometimes?
 		for (i in 0...freeRectangles.length) {
-			Sure.sure(test.add(freeRectangles[i]) == true);
+			ceramic.Assert.assert(test.add(freeRectangles[i]) == true);
 		}
 		#end
 	}
-	
+
 	private function findPositionForNewNode(width:Int, height:Int, rectChoice:GuillotineFreeRectChoiceHeuristic): { rect:Rect, nodeIndex:Int } {
 		var bestNode = new Rect();
 		var nodeIndex:Int = 0;
 		var bestScore = 0x3FFFFFFF; // Neko max int is this (2^30, 0x3FFFFFFF)
-		
+
 		for (i in 0...freeRectangles.length) {
 			if (width == freeRectangles[i].width && height == freeRectangles[i].height) {
 				bestNode.x = freeRectangles[i].x;
@@ -143,7 +143,7 @@ class GuillotinePacker implements IOccupancy {
 				bestScore = 0xC0000000; // Neko min int is this (2^30-1, 0xC0000000)
 				nodeIndex = i;
 				#if debug
-				Sure.sure(disjointRects.disjoint(bestNode));
+				ceramic.Assert.assert(disjointRects.disjoint(bestNode));
 				#end
 				break;
 			} else if (height == freeRectangles[i].width && width == freeRectangles[i].height) {
@@ -155,12 +155,12 @@ class GuillotinePacker implements IOccupancy {
 				bestScore =  0xC0000000; // Neko min int is this (2^30-1, 0xC0000000)
 				nodeIndex = i;
 				#if debug
-				Sure.sure(disjointRects.disjoint(bestNode));
+				ceramic.Assert.assert(disjointRects.disjoint(bestNode));
 				#end
 				break;
 			} else if (width <= freeRectangles[i].width && height <= freeRectangles[i].height) {
 				var score = scoreByHeuristic(width, height, freeRectangles[i], rectChoice);
-				
+
 				if (score < bestScore) {
 					bestNode.x = freeRectangles[i].x;
 					bestNode.y = freeRectangles[i].y;
@@ -169,12 +169,12 @@ class GuillotinePacker implements IOccupancy {
 					bestScore = score;
 					nodeIndex = i;
 					#if debug
-					Sure.sure(disjointRects.disjoint(bestNode));
+					ceramic.Assert.assert(disjointRects.disjoint(bestNode));
 					#end
 				}
 			} else if (height <= freeRectangles[i].width && width <= freeRectangles[i].height) {
 				var score = scoreByHeuristic(height, width, freeRectangles[i], rectChoice);
-				
+
 				if (score < bestScore) {
 					bestNode.x = freeRectangles[i].x;
 					bestNode.y = freeRectangles[i].y;
@@ -184,24 +184,24 @@ class GuillotinePacker implements IOccupancy {
 					bestScore = score;
 					nodeIndex = i;
 					#if debug
-					Sure.sure(disjointRects.disjoint(bestNode));
+					ceramic.Assert.assert(disjointRects.disjoint(bestNode));
 					#end
 				}
 			}
 		}
-		
+
 		// If no feasible position found, return null
 		if (bestNode.width == 0 && bestNode.height == 0) {
 			return { rect: null, nodeIndex: -1 };
 		}
-		
+
 		return { rect: bestNode, nodeIndex: nodeIndex };
 	}
-	
+
 	private function splitFreeRectByHeuristic(freeRect:Rect, placedRect:Rect, method:GuillotineSplitHeuristic):Void {
 		var w = freeRect.width - placedRect.width;
 		var h = freeRect.height - placedRect.height;
-		
+
 		var splitHorizontal:Bool;
 		switch(method) {
 			case GuillotineSplitHeuristic.ShorterLeftoverAxis:
@@ -219,17 +219,17 @@ class GuillotinePacker implements IOccupancy {
 			default:
 				splitHorizontal = true;
 				#if debug
-				Sure.sure(false);
+				ceramic.Assert.assert(false);
 				#end
 		}
-		
+
 		splitFreeRectAlongAxis(freeRect, placedRect, splitHorizontal);
 	}
-	
+
 	private function splitFreeRectAlongAxis(freeRect:Rect, placedRect:Rect, splitHorizontal:Bool):Void {
 		var bottom = new Rect(freeRect.x, freeRect.y + placedRect.height, 0, freeRect.height - placedRect.height);
 		var right = new Rect(freeRect.x + placedRect.width, freeRect.y, freeRect.width - placedRect.width, 0);
-		
+
 		if (splitHorizontal) {
 			bottom.width = freeRect.width;
 			right.height = placedRect.height;
@@ -237,20 +237,20 @@ class GuillotinePacker implements IOccupancy {
 			bottom.width = placedRect.width;
 			right.height = freeRect.height;
 		}
-		
+
 		if (bottom.width > 0 && bottom.height > 0) {
 			freeRectangles.push(bottom);
 		}
 		if (right.width > 0 && right.height > 0) {
 			freeRectangles.push(right);
 		}
-		
+
 		#if debug
-		Sure.sure(disjointRects.disjoint(bottom));
-		Sure.sure(disjointRects.disjoint(right));
+		ceramic.Assert.assert(disjointRects.disjoint(bottom));
+		ceramic.Assert.assert(disjointRects.disjoint(right));
 		#end
 	}
-	
+
 	private static function scoreByHeuristic(width:Int, height:Int, freeRect:Rect, rectChoice:GuillotineFreeRectChoiceHeuristic):Int {
 		return switch(rectChoice) {
 			case GuillotineFreeRectChoiceHeuristic.BestAreaFit:
@@ -267,33 +267,33 @@ class GuillotinePacker implements IOccupancy {
 				scoreWorstLongSideFit(width, height, freeRect);
 		}
 	}
-	
+
 	private static function scoreBestAreaFit(width:Int, height:Int, freeRect:Rect):Int {
 		return Std.int(freeRect.width * freeRect.height - width * height);
 	}
-	
+
 	private static function scoreBestShortSideFit(width:Int, height:Int, freeRect:Rect):Int {
 		var leftoverHoriz = Math.abs(freeRect.width - width);
 		var leftoverVert = Math.abs(freeRect.height - height);
 		var leftover = Math.min(leftoverHoriz, leftoverVert);
 		return Std.int(leftover);
 	}
-	
+
 	private static function scoreBestLongSideFit(width:Int, height:Int, freeRect:Rect):Int {
 		var leftoverHoriz = Math.abs(freeRect.width - width);
 		var leftoverVert = Math.abs(freeRect.height - height);
 		var leftover = Math.max(leftoverHoriz, leftoverVert);
 		return Std.int(leftover);
 	}
-	
+
 	private static function scoreWorstAreaFit(width:Int, height:Int, freeRect:Rect):Int {
 		return -scoreBestAreaFit(width, height, freeRect);
 	}
-	
+
 	private static function scoreWorstShortSideFit(width:Int, height:Int, freeRect:Rect):Int {
 		return -scoreBestShortSideFit(width, height, freeRect);
 	}
-	
+
 	private static function scoreWorstLongSideFit(width:Int, height:Int, freeRect:Rect):Int {
 		return -scoreBestLongSideFit(width, height, freeRect);
 	}
