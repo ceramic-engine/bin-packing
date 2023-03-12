@@ -1,11 +1,29 @@
 package binpacking;
 
-enum FreeRectChoiceHeuristic {
-	BestShortSideFit;
-	BestLongSideFit;
-	BestAreaFit;
-	BottomLeftRule;
-	ContactPointRule;
+enum abstract FreeRectChoiceHeuristic(Int) from Int to Int {
+	var BestShortSideFit = 1;
+	var BestLongSideFit = 2;
+	var BestAreaFit = 3;
+	var BottomLeftRule = 4;
+	var ContactPointRule = 5;
+}
+
+class MaxRectsPackerBestFitPosition {
+	public var bestNode:Rect = null;
+	public var bestAreaFit:Int = -1;
+	public var bestShortSideFit:Int = -1;
+	public var bestLongSideFit:Int = -1;
+	public var bestContactScore:Int = -1;
+	public var bestX:Int = -1;
+	public var bestY:Int = -1;
+	public function new() {}
+}
+
+@:structInit
+class MaxRectsPackerRectScore {
+	public var rect:Rect;
+	public var primaryScore:Int;
+	public var secondaryScore:Int;
 }
 
 class MaxRectsPacker implements IOccupancy {
@@ -14,37 +32,39 @@ class MaxRectsPacker implements IOccupancy {
 	public var binAllowFlip(default, null):Bool;
 	public var usedRectangles(default, null):Array<Rect> = new Array<Rect>();
 	public var freeRectangles(default, null):Array<Rect> = new Array<Rect>();
-	
+
+	var _bestFitPosition = new MaxRectsPackerBestFitPosition();
+
 	public function new(width:Int = 0, height:Int = 0, allowFlip:Bool = true) {
 		binWidth = width;
 		binHeight = height;
 		binAllowFlip = allowFlip;
-		
+
 		var n = new Rect(0, 0, width, height);
-		
+
 		freeRectangles.push(n);
 	}
-	
+
 	public function insert(width:Int, height:Int, method:FreeRectChoiceHeuristic):Rect {
 		var newNode:Rect = switch(method) {
 			case FreeRectChoiceHeuristic.BestShortSideFit:
-				findPositionForNewNodeBestShortSideFit(width, height).bestNode;
+				findPositionForNewNodeBestShortSideFit(width, height, _bestFitPosition).bestNode;
 			case FreeRectChoiceHeuristic.BottomLeftRule:
-				findPositionForNewNodeBottomLeft(width, height).bestNode;
+				findPositionForNewNodeBottomLeft(width, height, _bestFitPosition).bestNode;
 			case FreeRectChoiceHeuristic.ContactPointRule:
-				findPositionForNewNodeContactPoint(width, height).bestNode;
+				findPositionForNewNodeContactPoint(width, height, _bestFitPosition).bestNode;
 			case FreeRectChoiceHeuristic.BestLongSideFit:
-				findPositionForNewNodeBestLongSideFit(width, height).bestNode;
+				findPositionForNewNodeBestLongSideFit(width, height, _bestFitPosition).bestNode;
 			case FreeRectChoiceHeuristic.BestAreaFit:
-				findPositionForNewNodeBestAreaFit(width, height).bestNode;
+				findPositionForNewNodeBestAreaFit(width, height, _bestFitPosition).bestNode;
 		}
-		
+
 		if (newNode == null || newNode.width == 0 || newNode.height == 0) {
 			return null;
 		}
-		
+
 		var numRectanglesToProcess = freeRectangles.length;
-		
+
 		var i = 0;
 		while (i < numRectanglesToProcess) {
 			if (splitFreeNode(freeRectangles[i], newNode)) {
@@ -54,77 +74,77 @@ class MaxRectsPacker implements IOccupancy {
 			}
 			i++;
 		}
-		
+
 		pruneFreeList();
-		
+
 		usedRectangles.push(newNode);
 		return newNode;
 	}
-	
+
 	public function occupancy():Float {
 		if (usedRectangles.length == 0) {
 			return 0.0;
 		}
-		
+
 		var usedSurfaceArea:Float = 0;
-		
+
 		for (i in 0...usedRectangles.length) {
 			usedSurfaceArea += usedRectangles[i].width * usedRectangles[i].height;
 		}
-		
+
 		return usedSurfaceArea / (binWidth * binHeight);
 	}
-	
-	private function scoreRect(width:Int, height:Int, method:FreeRectChoiceHeuristic): { rect:Rect, primaryScore: Int, secondaryScore: Int } {
+
+	private function scoreRect(width:Int, height:Int, method:FreeRectChoiceHeuristic):MaxRectsPackerRectScore {
 		var newNode:Rect = new Rect();
 		var score1:Int = 0x3FFFFFFF;
 		var score2:Int = 0x3FFFFFFF;
-		
+
 		switch(method) {
 			case FreeRectChoiceHeuristic.BestShortSideFit:
-				var data = findPositionForNewNodeBestShortSideFit(width, height);
+				var data = findPositionForNewNodeBestShortSideFit(width, height, _bestFitPosition);
 				newNode = data.bestNode;
 				score1 = data.bestShortSideFit;
 				score2 = data.bestLongSideFit;
 			case FreeRectChoiceHeuristic.BottomLeftRule:
-				var data = findPositionForNewNodeBottomLeft(width, height);
+				var data = findPositionForNewNodeBottomLeft(width, height, _bestFitPosition);
 				newNode = data.bestNode;
 				score1 = data.bestY;
 				score2 = data.bestX;
 			case FreeRectChoiceHeuristic.ContactPointRule:
-				var data = findPositionForNewNodeContactPoint(width, height);
+				var data = findPositionForNewNodeContactPoint(width, height, _bestFitPosition);
 				newNode = data.bestNode;
 				score1 = -data.bestContactScore;
 			case FreeRectChoiceHeuristic.BestLongSideFit:
-				var data = findPositionForNewNodeBestLongSideFit(width, height);
+				var data = findPositionForNewNodeBestLongSideFit(width, height, _bestFitPosition);
 				newNode = data.bestNode;
 				score1 = data.bestLongSideFit;
 				score2 = data.bestLongSideFit;
 			case FreeRectChoiceHeuristic.BestAreaFit:
-				var data = findPositionForNewNodeBestAreaFit(width, height);
+				var data = findPositionForNewNodeBestAreaFit(width, height, _bestFitPosition);
 				newNode = data.bestNode;
 				score1 = data.bestAreaFit;
 				score2 = data.bestShortSideFit;
 		}
-		
+
 		if (newNode.height == 0) {
 			score1 = 0x3FFFFFFF;
 			score2 = 0x3FFFFFFF;
 		}
-		
+
 		return { rect: newNode, primaryScore: score1, secondaryScore: score2 };
 	}
-	
+
 	private function contactPointScoreNode(x:Int, y:Int, width:Int, height:Int):Int {
 		var score = 0;
-		
+
 		if (x == 0 || x + width == binWidth) {
 			score += height;
 		}
 		if (y == 0 || y + height == binHeight) {
 			score += width;
 		}
-		
+
 		for (i in 0...usedRectangles.length) {
 			if (usedRectangles[i].x == x + width || usedRectangles[i].x + usedRectangles[i].width == x) {
 				score += Std.int(commonIntervalLength(usedRectangles[i].y, usedRectangles[i].height, y, y + height));
@@ -133,20 +153,20 @@ class MaxRectsPacker implements IOccupancy {
 				score += Std.int(commonIntervalLength(usedRectangles[i].x, usedRectangles[i].x + usedRectangles[i].width, x, x + width));
 			}
 		}
-		
+
 		return score;
 	}
-	
-	private function findPositionForNewNodeBottomLeft(width:Int, height:Int):{ bestNode:Rect, bestY:Int, bestX:Int } {
+
+	private function findPositionForNewNodeBottomLeft(width:Int, height:Int, result:MaxRectsPackerBestFitPosition):MaxRectsPackerBestFitPosition {
 		var bestNode:Rect = new Rect();
-		
+
 		var bestY = 0x3FFFFFFF;
 		var bestX = 0x3FFFFFFF;
-		
+
 		for (i in 0...freeRectangles.length) {
 			if (freeRectangles[i].width >= width && freeRectangles[i].height < bestX) {
 				var topSideY = Std.int(freeRectangles[i].y + height);
-				
+
 				bestNode.x = freeRectangles[i].x;
 				bestNode.y = freeRectangles[i].y;
 				bestNode.width = width;
@@ -154,10 +174,10 @@ class MaxRectsPacker implements IOccupancy {
 				bestY = topSideY;
 				bestX = Std.int(freeRectangles[i].x);
 			}
-			
+
 			if (binAllowFlip && freeRectangles[i].width >= height && freeRectangles[i].height >= width) {
 				var topSideY = Std.int(freeRectangles[i].y + height);
-				
+
 				bestNode.x = freeRectangles[i].x;
 				bestNode.y = freeRectangles[i].y;
 				bestNode.width = width;
@@ -166,23 +186,26 @@ class MaxRectsPacker implements IOccupancy {
 				bestX = Std.int(freeRectangles[i].x);
 			}
 		}
-		
-		return { bestNode: bestNode, bestY: bestY, bestX: bestX };
+
+		result.bestNode = bestNode;
+		result.bestY = bestY;
+		result.bestX = bestX;
+		return result;
 	}
-	
-	private function findPositionForNewNodeBestShortSideFit(width:Int, height:Int):{ bestNode: Rect, bestShortSideFit:Int, bestLongSideFit:Int } {
+
+	private function findPositionForNewNodeBestShortSideFit(width:Int, height:Int, result:MaxRectsPackerBestFitPosition):MaxRectsPackerBestFitPosition {
 		var bestNode:Rect = new Rect();
-		
+
 		var bestShortSideFit = 0x3FFFFFFF;
 		var bestLongSideFit = 0x3FFFFFFF;
-		
+
 		for (i in 0...freeRectangles.length) {
 			if (freeRectangles[i].width >= width && freeRectangles[i].height >= height) {
 				var leftoverHoriz = Math.abs(freeRectangles[i].width - width);
 				var leftoverVert = Math.abs(freeRectangles[i].height - height);
 				var shortSideFit = Math.min(leftoverHoriz, leftoverVert);
 				var longSideFit = Math.max(leftoverHoriz, leftoverVert);
-			
+
 				if (shortSideFit < bestShortSideFit || (shortSideFit == bestShortSideFit && longSideFit < bestLongSideFit)) {
 					bestNode.x = freeRectangles[i].x;
 					bestNode.y = freeRectangles[i].y;
@@ -192,13 +215,13 @@ class MaxRectsPacker implements IOccupancy {
 					bestLongSideFit = Std.int(longSideFit);
 				}
 			}
-			
+
 			if (binAllowFlip && freeRectangles[i].width >= height && freeRectangles[i].height >= width) {
 				var flippedLeftoverHoriz = Math.abs(freeRectangles[i].width - height);
 				var flippedLeftoverVert = Math.abs(freeRectangles[i].height - width);
 				var flippedShortSideFit = Math.min(flippedLeftoverHoriz, flippedLeftoverVert);
 				var flippedLongSideFit = Math.max(flippedLeftoverHoriz, flippedLeftoverVert);
-				
+
 				if (flippedShortSideFit < bestShortSideFit || (flippedShortSideFit == bestShortSideFit && flippedLongSideFit < bestLongSideFit)) {
 					bestNode.x = freeRectangles[i].x;
 					bestNode.y = freeRectangles[i].y;
@@ -210,23 +233,26 @@ class MaxRectsPacker implements IOccupancy {
 				}
 			}
 		}
-		
-		return { bestNode: bestNode, bestShortSideFit: bestShortSideFit, bestLongSideFit: bestLongSideFit };
+
+		result.bestNode = bestNode;
+		result.bestShortSideFit = bestShortSideFit;
+		result.bestLongSideFit = bestLongSideFit;
+		return result;
 	}
-	
-	private function findPositionForNewNodeBestLongSideFit(width:Int, height:Int):{ bestNode: Rect, bestShortSideFit:Int, bestLongSideFit:Int } {
+
+	private function findPositionForNewNodeBestLongSideFit(width:Int, height:Int, result:MaxRectsPackerBestFitPosition):MaxRectsPackerBestFitPosition {
 		var bestNode:Rect = new Rect();
-		
+
 		var bestShortSideFit = 0x3FFFFFFF;
 		var bestLongSideFit = 0x3FFFFFFF;
-		
+
 		for (i in 0...freeRectangles.length) {
 			if (freeRectangles[i].width >= width && freeRectangles[i].height >= height) {
 				var leftoverHoriz = Math.abs(freeRectangles[i].width - width);
 				var leftoverVert = Math.abs(freeRectangles[i].height - height);
 				var shortSideFit = Math.min(leftoverHoriz, leftoverVert);
 				var longSideFit = Math.max(leftoverHoriz, leftoverVert);
-			
+
 				if (longSideFit < bestLongSideFit || (longSideFit == bestLongSideFit && shortSideFit < bestShortSideFit)) {
 					bestNode.x = freeRectangles[i].x;
 					bestNode.y = freeRectangles[i].y;
@@ -236,13 +262,13 @@ class MaxRectsPacker implements IOccupancy {
 					bestLongSideFit = Std.int(longSideFit);
 				}
 			}
-			
+
 			if (binAllowFlip && freeRectangles[i].width >= height && freeRectangles[i].height >= width) {
 				var leftoverHoriz = Math.abs(freeRectangles[i].width - width);
 				var leftoverVert = Math.abs(freeRectangles[i].height - height);
 				var shortSideFit = Math.min(leftoverHoriz, leftoverVert);
 				var longSideFit = Math.max(leftoverHoriz, leftoverVert);
-				
+
 				if (longSideFit < bestLongSideFit || (longSideFit == bestLongSideFit && shortSideFit < bestShortSideFit)) {
 					bestNode.x = freeRectangles[i].x;
 					bestNode.y = freeRectangles[i].y;
@@ -254,11 +280,14 @@ class MaxRectsPacker implements IOccupancy {
 				}
 			}
 		}
-		
-		return { bestNode: bestNode, bestShortSideFit: bestShortSideFit, bestLongSideFit: bestLongSideFit };
+
+		result.bestNode = bestNode;
+		result.bestShortSideFit = bestShortSideFit;
+		result.bestLongSideFit = bestLongSideFit;
+		return result;
 	}
-	
-	private function findPositionForNewNodeBestAreaFit(width:Int, height:Int): { bestNode: Rect, bestAreaFit:Int, bestShortSideFit:Int } {
+
+	private function findPositionForNewNodeBestAreaFit(width:Int, height:Int, result:MaxRectsPackerBestFitPosition):MaxRectsPackerBestFitPosition {
 		var bestNode:Rect = new Rect();
 
 		var bestAreaFit = 0x3FFFFFFF;
@@ -298,15 +327,18 @@ class MaxRectsPacker implements IOccupancy {
 				}
 			}
 		}
-		
-		return { bestNode: bestNode, bestAreaFit: bestAreaFit, bestShortSideFit: bestShortSideFit };
+
+		result.bestNode = bestNode;
+		result.bestAreaFit = bestAreaFit;
+		result.bestShortSideFit = bestShortSideFit;
+		return result;
 	}
-	
-	private function findPositionForNewNodeContactPoint(width:Int, height:Int):{ bestNode: Rect, bestContactScore:Int } {
+
+	private function findPositionForNewNodeContactPoint(width:Int, height:Int, result:MaxRectsPackerBestFitPosition):MaxRectsPackerBestFitPosition {
 		var bestNode:Rect = new Rect();
-		
+
 		var bestContactScore = -1;
-		
+
 		for (i in 0...freeRectangles.length) {
 			if (freeRectangles[i].width >= width && freeRectangles[i].height >= height) {
 				var score = contactPointScoreNode(Std.int(freeRectangles[i].x), Std.int(freeRectangles[i].y), width, height);
@@ -318,7 +350,7 @@ class MaxRectsPacker implements IOccupancy {
 					bestContactScore = score;
 				}
 			}
-			
+
 			if (freeRectangles[i].width >= height && freeRectangles[i].height >= width) {
 				var score = contactPointScoreNode(Std.int(freeRectangles[i].x), Std.int(freeRectangles[i].y), height, width);
 				if (score > bestContactScore) {
@@ -331,10 +363,12 @@ class MaxRectsPacker implements IOccupancy {
 				}
 			}
 		}
-		
-		return { bestNode: bestNode, bestContactScore: bestContactScore };
+
+		result.bestNode = bestNode;
+		result.bestContactScore = bestContactScore;
+		return result;
 	}
-	
+
 	private function splitFreeNode(freeNode:Rect, usedNode:Rect):Bool {
 	if (usedNode.x >= freeNode.x + freeNode.width ||
 		usedNode.x + usedNode.width <= freeNode.x ||
@@ -342,7 +376,7 @@ class MaxRectsPacker implements IOccupancy {
 		usedNode.y + usedNode.height <= freeNode.y) {
 			return false;
 		}
-		
+
 		if (usedNode.x < freeNode.x + freeNode.width && usedNode.x + usedNode.width > freeNode.x) {
 			if (usedNode.y > freeNode.y && usedNode.y < freeNode.y + freeNode.height) {
 				var newNode = freeNode.clone();
@@ -370,10 +404,10 @@ class MaxRectsPacker implements IOccupancy {
 				freeRectangles.push(newNode);
 			}
 		}
-		
+
 		return true;
 	}
-	
+
 	private function pruneFreeList():Void {
 		var i = 0;
 		while (i < freeRectangles.length) {
@@ -384,18 +418,18 @@ class MaxRectsPacker implements IOccupancy {
 					i--;
 					break;
 				}
-				
+
 				if (freeRectangles[j].isContainedIn(freeRectangles[i])) {
 					freeRectangles.splice(j, 1);
 					continue;
 				}
-				
+
 				j++;
 			}
 			i++;
 		}
 	}
-	
+
 	private function commonIntervalLength(i1start:Float, i1end:Float, i2start:Float, i2end:Float):Float {
 		if (i1end < i2start || i2end < i1start) {
 			return 0;
